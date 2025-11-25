@@ -85,7 +85,7 @@ The semantic distance is calculated using cosine similarity of sentence embeddin
 3. **Make agent scripts executable:**
    ```bash
    chmod +x agents/*.sh
-   chmod +x run_pipeline.sh
+   chmod +x run_batch.sh
    ```
 
 4. **Verify Claude CLI is installed:**
@@ -100,7 +100,7 @@ The semantic distance is calculated using cosine similarity of sentence embeddin
 Run the complete pipeline for all typo levels:
 
 ```bash
-./run_pipeline.sh
+./run_batch.sh
 ```
 
 This will:

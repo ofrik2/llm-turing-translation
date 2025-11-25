@@ -12,14 +12,18 @@ fi
 INPUT_FILE="$1"
 OUTPUT_FILE="$2"
 
-MODEL="opus"
-
-SYSTEM_PROMPT="You are a professional translator. Translate the user's text from Hebrew to English. Only output the translated sentence, without any explanations or extra text."
+MODEL="haiku"
 
 USER_MESSAGE="$(cat "$INPUT_FILE")"
 
+PROMPT=$'Translate the following text from Hebrew to English.\n'\
+$'Rules:\n'\
+$'- ALWAYS respond in English.\n'\
+$'- ONLY output the translated sentence.\n'\
+$'- Do NOT add explanations, comments, or extra text.\n\n'"$USER_MESSAGE"
+
 claude \
+  --print \
   --model "$MODEL" \
-  --system-prompt "$SYSTEM_PROMPT" \
-  -p "$USER_MESSAGE" \
+  "$PROMPT" \
   > "$OUTPUT_FILE"

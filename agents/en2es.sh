@@ -12,16 +12,19 @@ fi
 INPUT_FILE="$1"
 OUTPUT_FILE="$2"
 
-# You can use an alias like "opus" / "sonnet" or full model name
-MODEL="opus"
-
-SYSTEM_PROMPT="You are a professional translator. Translate the user's text from English to Spanish. Only output the translated sentence, without any explanations or extra text."
+MODEL="haiku"
 
 # Read the input file content as the user message
 USER_MESSAGE="$(cat "$INPUT_FILE")"
 
+PROMPT=$'Translate the following text from English to Spanish.\n'\
+$'Rules:\n'\
+$'- ALWAYS respond in Spanish.\n'\
+$'- ONLY output the translated sentence.\n'\
+$'- Do NOT add explanations, comments, or extra text.\n\n'"$USER_MESSAGE"
+
 claude \
+  --print \
   --model "$MODEL" \
-  --system-prompt "$SYSTEM_PROMPT" \
-  -p "$USER_MESSAGE" \
+  "$PROMPT" \
   > "$OUTPUT_FILE"
