@@ -5,9 +5,6 @@
 
 ## Table of Contents
 
-- [Round-Trip Translation Pipeline Using LLM Agents](#round-trip-translation-pipeline-using-llm-agents)
-    - [*Turing-machine-style pipeline with Claude CLI + Python embeddings*](#turing-machine-style-pipeline-with-claude-cli--python-embeddings)
-  - [Table of Contents](#table-of-contents)
   - [1. Overview](#1-overview)
     - [Research Questions](#research-questions)
     - [The Translation Chain](#the-translation-chain)
@@ -15,7 +12,12 @@
     - [Python Usage (Measurement Only)](#python-usage-measurement-only)
   - [2. Two Main Experiments](#2-two-main-experiments)
     - [**Part 1 — Single-Sentence Pipeline**](#part-1--single-sentence-pipeline)
+      - [Usage](#usage)
+      - [What Happens Internally](#what-happens-internally)
     - [**Part 2 — Systematic Typo Experiment**](#part-2--systematic-typo-experiment)
+      - [Step 1: Run Batch Translations](#step-1-run-batch-translations)
+      - [Step 2: Run Experiment Analysis](#step-2-run-experiment-analysis)
+      - [Result Files](#result-files)
   - [3. Conceptual Architecture](#3-conceptual-architecture)
     - [Data Flow Diagram](#data-flow-diagram)
     - [Agent Properties](#agent-properties)
@@ -24,15 +26,9 @@
     - [Install Claude CLI](#install-claude-cli)
     - [Make scripts executable](#make-scripts-executable)
     - [Install Python dependencies](#install-python-dependencies)
-  - [6. Part 1 — Single Sentence Pipeline](#6-part-1--single-sentence-pipeline)
-    - [Usage](#usage)
-    - [What Happens Internally](#what-happens-internally)
-    - [Example Output](#example-output)
+  - [6. Part 1 — Single Sentence Pipeline Showcases](#6-part-1--single-sentence-pipeline-showcases)
   - [7. Part 2 — Typo% vs Semantic Drift](#7-part-2--typo-vs-semantic-drift)
     - [Input Files Preparation](#input-files-preparation)
-    - [Step 1: Run Batch Translations](#step-1-run-batch-translations)
-    - [Step 2: Run Experiment Analysis](#step-2-run-experiment-analysis)
-    - [Result Files](#result-files)
     - [Example Results](#example-results)
     - [Key Findings](#key-findings)
   - [8. Mathematical Properties](#8-mathematical-properties)
@@ -100,6 +96,25 @@ An interactive mode for testing arbitrary English sentences (including those wit
 4. Displays all intermediate translations for inspection
 5. Computes and displays the cosine distance between original and final embeddings
 
+#### Usage
+
+```bash
+./run_single.sh "this is my test sentence with severl tpoys in it"
+```
+
+#### What Happens Internally
+
+1. **Input Handling**: The provided sentence is saved to `data/single_input.txt`
+2. **Translation Chain**:
+   - `agents/en2es.sh data/single_input.txt data/single_es.txt` → Spanish translation
+   - `agents/es2he.sh data/single_es.txt data/single_he.txt` → Hebrew translation  
+   - `agents/he2en.sh data/single_he.txt data/single_en_back.txt` → Back to English
+3. **Distance Computation**: Inline Python code computes cosine distance between original and final text
+4. **Display**: Shows all intermediate steps and final metric
+
+### Example Output
+full example output is shown in **Section 6**.
+
 ### **Part 2 — Systematic Typo Experiment**
 
 A controlled experiment with pre-prepared inputs at increasing typo percentages:
@@ -117,6 +132,46 @@ Each typo level has a fixed input file (`en_input_{level}.txt`) containing the s
 
 **Research Value**: Reveals non-linear relationships - LLMs may actually **correct** minor typos during translation, potentially reducing drift at low corruption levels.
 
+#### Step 1: Run Batch Translations
+
+```bash
+./run_batch.sh
+```
+
+**What Happens**:
+- Loops through typo levels: 0, 10, 20, 30, 40, 50
+- For each level `N`:
+  1. Reads `data/en_input_N.txt`
+  2. Calls `agents/en2es.sh` → produces `data/es_N.txt`
+  3. Calls `agents/es2he.sh` → produces `data/he_N.txt`
+  4. Calls `agents/he2en.sh` → produces `data/en_back_N.txt`
+- Generates 18 intermediate files (3 per typo level)
+
+#### Step 2: Run Experiment Analysis
+
+```bash
+cd embeddings
+python run_experiment.py
+```
+
+**Analysis Process**:
+1. For each typo level, reads original (`en_input_N.txt`) and final (`en_back_N.txt`)
+2. Computes 26-dimensional letter frequency embeddings
+3. Calculates cosine distance between embeddings
+4. Exports results to CSV
+5. Generates visualization plot
+
+#### Result Files
+
+```
+experiments/results.csv           # Structured data: typo_percent,distance
+experiments/typos_vs_distance.png # Visual plot showing correlation
+
+#### Example Output
+full example output is shown in **Section 7**.
+
+```
+
 ## 3. Conceptual Architecture
 
 Agents behave like Turing-machine transitions, where each state transformation is a translation step:
@@ -126,15 +181,15 @@ Agents behave like Turing-machine transitions, where each state transformation i
 │                    TURING MACHINE ANALOGY                           │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Tape (Files)              │  States (Agents)    │  Transitions      │
-│                          │                     │  (Claude API)     │
+│                           │                     │  (Claude API)     │
 ├───────────────────────────┼─────────────────────┼───────────────────┤
-│ en_input_N.txt           │  agents/en2es.sh    │  EN text → ES     │
-│         ↓                │         ↓           │         ↓         │
-│ es_N.txt                 │  agents/es2he.sh    │  ES text → HE     │
-│         ↓                │         ↓           │         ↓         │
-│ he_N.txt                 │  agents/he2en.sh    │  HE text → EN     │
-│         ↓                │         ↓           │         ↓         │
-│ en_back_N.txt            │  [HALT]             │  [Complete]       │
+│ en_input_N.txt            │  agents/en2es.sh    │  EN text → ES     │
+│         ↓                 │         ↓           │         ↓         │
+│ es_N.txt                  │  agents/es2he.sh    │  ES text → HE     │
+│         ↓                 │         ↓           │         ↓         │
+│ he_N.txt                  │  agents/he2en.sh    │  HE text → EN     │
+│         ↓                 │         ↓           │         ↓         │
+│ en_back_N.txt             │  [HALT]             │  [Complete]       │
 └───────────────────────────┴─────────────────────┴───────────────────┘
 ```
 
@@ -264,145 +319,7 @@ chmod -R +x agents/
 pip install -r requirements.txt
 ```
 
-## 6. Part 1 — Single Sentence Pipeline
-
-### Usage
-
-```bash
-./run_single.sh "this is my test sentence with severl tpoys in it"
-```
-
-### What Happens Internally
-
-1. **Input Handling**: The provided sentence is saved to `data/single_input.txt`
-2. **Translation Chain**:
-   - `agents/en2es.sh data/single_input.txt data/single_es.txt` → Spanish translation
-   - `agents/es2he.sh data/single_es.txt data/single_he.txt` → Hebrew translation  
-   - `agents/he2en.sh data/single_he.txt data/single_en_back.txt` → Back to English
-3. **Distance Computation**: Inline Python code computes cosine distance between original and final text
-4. **Display**: Shows all intermediate steps and final metric
-
-### Example Output
-full example output is shown in **Section 8**.
-
-## 7. Part 2 — Typo% vs Semantic Drift
-
-### Input Files Preparation
-
-The experiment uses 6 pre-prepared input files with controlled typo percentages:
-
-```
-data/en_input_0.txt   → "i am very irritated because i have been working on this for too long"
-data/en_input_10.txt  → "i am very irritated becuase i have been working on this for too long"
-data/en_input_20.txt  → "i am vrey irritated becuase i hve been working on tihs for too long"
-data/en_input_30.txt  → "i am vrey iritated becuase i have been wokring on this for too long"
-data/en_input_40.txt  → "i am vrey iritated becuase i hve been wokring on this for to long"
-data/en_input_50.txt  → "i am vrey iritaetd becuase i hve been wokring on tihs for to long"
-```
-
-**Typo Generation Strategy**: Character-level corruption (letter swaps, deletions, insertions) distributed throughout the sentence to simulate realistic typing errors.
-
-### Step 1: Run Batch Translations
-
-```bash
-./run_batch.sh
-```
-
-**What Happens**:
-- Loops through typo levels: 0, 10, 20, 30, 40, 50
-- For each level `N`:
-  1. Reads `data/en_input_N.txt`
-  2. Calls `agents/en2es.sh` → produces `data/es_N.txt`
-  3. Calls `agents/es2he.sh` → produces `data/he_N.txt`
-  4. Calls `agents/he2en.sh` → produces `data/en_back_N.txt`
-- Generates 18 intermediate files (3 per typo level)
-
-### Step 2: Run Experiment Analysis
-
-```bash
-cd embeddings
-python run_experiment.py
-```
-
-**Analysis Process**:
-1. For each typo level, reads original (`en_input_N.txt`) and final (`en_back_N.txt`)
-2. Computes 26-dimensional letter frequency embeddings
-3. Calculates cosine distance between embeddings
-4. Exports results to CSV
-5. Generates visualization plot
-
-### Result Files
-
-```
-experiments/results.csv           # Structured data: typo_percent,distance
-experiments/typos_vs_distance.png # Visual plot showing correlation
-```
-
-### Example Results
-
-Based on actual experimental data:
-
-```csv
-typo_percent,distance
-0,0.129    # Baseline drift (even clean text drifts through 3 translations!)
-10,0.039   # Lower than baseline - LLM correction effect
-20,0.087   # Increasing drift
-30,0.087   # Same as 20%
-40,0.062   # Unexpected drop
-50,0.062   # Plateau effect
-```
-
-and a plot visualizing these results:
-![alt text](experiments/typos_vs_distance.png)
-
-### Key Findings
-
-1. **Baseline Drift (0%)**: Even perfect input experiences semantic drift (0.129) due to:
-   - Translation ambiguity across languages
-   - Cultural/linguistic differences in expression
-   - LLM's probabilistic nature
-
-2. **Non-Linear Relationship**: The correlation isn't strictly monotonic
-   - **10% typos** show *lower* drift than clean text
-   - Hypothesis: LLMs perform implicit error correction, potentially "normalizing" the text
-
-3. **Plateau Effect (40-50%)**: High corruption levels converge to similar distances
-   - Beyond a threshold, the LLM treats input as "highly corrupted" 
-   - Activates stronger correction mechanisms
-
-4. **Semantic Preservation**: Despite typos, core meaning often survives:
-   - "irritated" → "nervous" (semantic shift but related emotion)
-   - Grammar may restructure but intent remains recognizable
-
-## 8. Mathematical Properties
-
-Given two texts $T_1$ and $T_2$, we compute:
-
-1. **Embedding vectors**: $\vec{v_1}, \vec{v_2} \in \mathbb{R}^{26}$ where each dimension represents count of letters a-z
-   
-2. **Cosine similarity**: 
-   $$\text{sim}(\vec{v_1}, \vec{v_2}) = \frac{\vec{v_1} \cdot \vec{v_2}}{\|\vec{v_1}\| \|\vec{v_2}\|}$$
-
-3. **Cosine distance**: 
-   $$d(\vec{v_1}, \vec{v_2}) = 1 - \text{sim}(\vec{v_1}, \vec{v_2})$$
-
-**Distance Interpretation**:
-- $d = 0$: Identical letter distributions (perfect preservation)
-- $d = 1$: Orthogonal distributions (no correlation)
-- $d = 2$: Opposite distributions (theoretical maximum)
-
-**Example Calculation**:
-
-Original: "hello" → Vector: [1,0,0,0,1,0,0,1,0,0,0,2,0,0,1,0,0,0,0,0,0,0,0,0,0,0]  
-(h=1, e=1, l=2, o=1)
-
-Final: "hola" → Vector: [1,0,0,0,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0]  
-(h=1, o=1, l=1, a=1)
-
-Despite semantic equivalence, $d \approx 0.18$ due to letter distribution changes.
-
-
-## 9. Detailed Translation Examples
+## 6. Part 1 — Single Sentence Pipeline Showcases
 
 To illustrate the semantic drift phenomenon, here are actual translation chains from the experiment:
 
@@ -511,9 +428,91 @@ Throughout the experiments, we observed interesting translation choices:
 - Often becomes simple past: "worked" or "I worked"
 - Reflects structural differences between languages
 
-## 10. Technical Observations and Insights
 
-### 10.1. LLM Behavior Patterns
+## 7. Part 2 — Typo% vs Semantic Drift Showcase
+
+### Input Files Preparation
+
+The experiment uses 6 pre-prepared input files with controlled typo percentages:
+
+```
+data/en_input_0.txt   → "i am very irritated because i have been working on this for too long"
+data/en_input_10.txt  → "i am very irritated becuase i have been working on this for too long"
+data/en_input_20.txt  → "i am vrey irritated becuase i hve been working on tihs for too long"
+data/en_input_30.txt  → "i am vrey iritated becuase i have been wokring on this for too long"
+data/en_input_40.txt  → "i am vrey iritated becuase i hve been wokring on this for to long"
+data/en_input_50.txt  → "i am vrey iritaetd becuase i hve been wokring on tihs for to long"
+```
+
+**Typo Generation Strategy**: Character-level corruption (letter swaps, deletions, insertions) distributed throughout the sentence to simulate realistic typing errors.
+
+### Example Results
+
+Based on actual experimental data:
+
+```csv
+typo_percent,distance
+0,0.129    # Baseline drift (even clean text drifts through 3 translations!)
+10,0.039   # Lower than baseline - LLM correction effect
+20,0.087   # Increasing drift
+30,0.087   # Same as 20%
+40,0.062   # Unexpected drop
+50,0.062   # Plateau effect
+```
+
+### Plot visualizing these results:
+![alt text](experiments/typos_vs_distance.png)
+
+### Key Findings
+
+1. **Baseline Drift (0%)**: Even perfect input experiences semantic drift (0.129) due to:
+   - Translation ambiguity across languages
+   - Cultural/linguistic differences in expression
+   - LLM's probabilistic nature
+
+2. **Non-Linear Relationship**: The correlation isn't strictly monotonic
+   - **10% typos** show *lower* drift than clean text
+   - Hypothesis: LLMs perform implicit error correction, potentially "normalizing" the text
+
+3. **Plateau Effect (40-50%)**: High corruption levels converge to similar distances
+   - Beyond a threshold, the LLM treats input as "highly corrupted" 
+   - Activates stronger correction mechanisms
+
+4. **Semantic Preservation**: Despite typos, core meaning often survives:
+   - "irritated" → "nervous" (semantic shift but related emotion)
+   - Grammar may restructure but intent remains recognizable
+
+## 8. Mathematical Properties
+
+Given two texts $T_1$ and $T_2$, we compute:
+
+1. **Embedding vectors**: $\vec{v_1}, \vec{v_2} \in \mathbb{R}^{26}$ where each dimension represents count of letters a-z
+   
+2. **Cosine similarity**: 
+   $$\text{sim}(\vec{v_1}, \vec{v_2}) = \frac{\vec{v_1} \cdot \vec{v_2}}{\|\vec{v_1}\| \|\vec{v_2}\|}$$
+
+3. **Cosine distance**: 
+   $$d(\vec{v_1}, \vec{v_2}) = 1 - \text{sim}(\vec{v_1}, \vec{v_2})$$
+
+**Distance Interpretation**:
+- $d = 0$: Identical letter distributions (perfect preservation)
+- $d = 1$: Orthogonal distributions (no correlation)
+- $d = 2$: Opposite distributions (theoretical maximum)
+
+**Example Calculation**:
+
+Original: "hello" → Vector: [1,0,0,0,1,0,0,1,0,0,0,2,0,0,1,0,0,0,0,0,0,0,0,0,0,0]  
+(h=1, e=1, l=2, o=1)
+
+Final: "hola" → Vector: [1,0,0,0,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0]  
+(h=1, o=1, l=1, a=1)
+
+Despite semantic equivalence, $d \approx 0.18$ due to letter distribution changes.
+
+
+## 9. Technical Observations and Insights
+
+### 9.1. LLM Behavior Patterns
 
 **Implicit Error Correction**:
 - Claude consistently corrected typos without being explicitly instructed
@@ -599,7 +598,7 @@ This project successfully implements core Turing Machine principles:
 - Single sentence: ~5-10 seconds (3 sequential API calls)
 - Batch processing: ~1-2 minutes (18 sequential API calls)
 
-## 11. Conclusion
+## 10. Conclusion
 
 This project demonstrates that:
 
